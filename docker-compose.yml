@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   chess-monitor:
@@ -9,10 +9,14 @@ services:
     volumes:
       # Persist SQLite database
       - ./data:/app/data
+      # Share host timezone (alternative method)
+      # - /etc/localtime:/etc/localtime:ro
+      # - /etc/timezone:/etc/timezone:ro
     environment:
       - DATABASE_URL=sqlite:///data/sessions.db
       - PORT=8080
       - DEBUG=false
+      - TZ=Asia/Kolkata # Set your timezone here
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/"]

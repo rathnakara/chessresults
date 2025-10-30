@@ -245,6 +245,56 @@ docker run -d -p 8080:8080 -v ./data:/app/data yourusername/chess-monitor
 | `DATABASE_URL` | `sqlite:///data/sessions.db` | Database connection URL |
 | `PORT` | `8080` | Port to run the app |
 | `DEBUG` | `false` | Enable debug mode |
+| `TZ` | `Asia/Kolkata` | Timezone for timestamps and logs |
+
+### Timezone Configuration
+
+The container is pre-configured with **Asia/Kolkata (IST)** timezone. To change:
+
+**Method 1: Environment Variable (Recommended)**
+
+Edit `docker-compose.yml`:
+```yaml
+environment:
+  - TZ=America/New_York  # Change to your timezone
+```
+
+Or with `docker run`:
+```bash
+docker run -d \
+  -e TZ=America/New_York \
+  -p 8080:8080 \
+  -v $(pwd)/data:/app/data \
+  chess-monitor
+```
+
+**Method 2: Mount Host Timezone**
+
+Uncomment in `docker-compose.yml`:
+```yaml
+volumes:
+  - /etc/localtime:/etc/localtime:ro
+  - /etc/timezone:/etc/timezone:ro
+```
+
+**Common Timezones:**
+- India: `Asia/Kolkata` (IST, UTC+5:30)
+- USA East: `America/New_York` (EST/EDT, UTC-5/-4)
+- USA West: `America/Los_Angeles` (PST/PDT, UTC-8/-7)
+- UK: `Europe/London` (GMT/BST, UTC+0/+1)
+- Germany/France: `Europe/Paris` (CET/CEST, UTC+1/+2)
+- Japan: `Asia/Tokyo` (JST, UTC+9)
+- Australia: `Australia/Sydney` (AEST/AEDT, UTC+10/+11)
+- Singapore: `Asia/Singapore` (SGT, UTC+8)
+- UAE: `Asia/Dubai` (GST, UTC+4)
+
+**Verify timezone in container:**
+```bash
+docker exec chess-tournament-monitor date
+# Should show your configured timezone
+```
+
+[Full timezone list](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)
 
 ## Health Checks
 

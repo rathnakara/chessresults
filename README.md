@@ -202,6 +202,26 @@ docker run -d -p 3000:8080 -v ./data:/app/data chess-monitor
 | `DATABASE_URL` | `sqlite:///data/sessions.db` | Database connection |
 | `PORT` | `8080` | Port to run the app |
 | `DEBUG` | `false` | Enable debug mode |
+| `TZ` | `Asia/Kolkata` | Timezone (e.g., `America/New_York`, `Europe/London`) |
+
+### Change Timezone
+
+Edit `docker-compose.yml` and change the `TZ` environment variable:
+
+```yaml
+environment:
+  - TZ=America/New_York  # Your timezone
+```
+
+**Common timezones:**
+- India: `Asia/Kolkata`
+- USA (EST): `America/New_York`
+- USA (PST): `America/Los_Angeles`
+- UK: `Europe/London`
+- Europe (CET): `Europe/Paris`
+- Australia: `Australia/Sydney`
+
+[Full timezone list](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)
 
 ## 🐛 Troubleshooting
 
