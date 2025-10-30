@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Chess Tournament Monitor</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family:
+                    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                    Oxygen, Ubuntu, Cantarell, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                padding: 20px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .container {
+                max-width: 600px;
+                width: 100%;
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                padding: 40px;
+            }
+            h1 {
+                margin-bottom: 10px;
+                color: #333;
+            }
+            .subtitle {
+                color: #666;
+                margin-bottom: 30px;
+                font-size: 0.95em;
+            }
+            .form-group {
+                margin-bottom: 25px;
+            }
+            label {
+                display: block;
+                margin-bottom: 8px;
+                font-weight: 600;
+                color: #333;
+                font-size: 1.1em;
+            }
+            input[type="text"],
+            input[type="number"] {
+                width: 100%;
+                padding: 12px 15px;
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                font-size: 1em;
+                transition: border-color 0.3s;
+            }
+            input[type="text"]:focus,
+            input[type="number"]:focus {
+                outline: none;
+                border-color: #667eea;
+            }
+            .help-text {
+                font-size: 0.9em;
+                color: #666;
+                margin-top: 8px;
+            }
+            .button {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+                padding: 15px 30px;
+                font-size: 1.1em;
+                border-radius: 8px;
+                cursor: pointer;
+                width: 100%;
+                font-weight: 600;
+                transition:
+                    transform 0.2s,
+                    box-shadow 0.2s;
+            }
+            .button:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+            }
+            .button:active {
+                transform: translateY(0);
+            }
+            .button:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+            }
+            .result {
+                margin-top: 20px;
+                padding: 15px;
+                border-radius: 8px;
+                background: #e8f5e9;
+                border-left: 4px solid #4caf50;
+            }
+            .error {
+                margin-top: 20px;
+                padding: 15px;
+                border-radius: 8px;
+                background: #ffebee;
+                border-left: 4px solid #f44336;
+                color: #c62828;
+            }
+            .loading {
+                display: none;
+                text-align: center;
+                margin-top: 20px;
+            }
+            .spinner {
+                border: 4px solid #f3f3f3;
+                border-top: 4px solid #667eea;
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                animation: spin 1s linear infinite;
+                margin: 0 auto;
+            }
+            @keyframes spin {
+                0% {
+                    transform: rotate(0deg);
+                }
+                100% {
+                    transform: rotate(360deg);
+                }
+            }
+            .view-link {
+                display: inline-block;
+                margin-top: 10px;
+                color: #667eea;
+                text-decoration: none;
+                font-weight: 600;
+                font-size: 1.1em;
+            }
+            .view-link:hover {
+                text-decoration: underline;
+            }
+            .session-counter {
+                text-align: center;
+                padding: 15px;
+                margin-bottom: 20px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                border-radius: 8px;
+                color: white;
+                font-size: 1.2em;
+                font-weight: 600;
+            }
+            .session-counter.full {
+                background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+            }
+            .limit-warning {
+                background: #fff3cd;
+                border: 1px solid #ffc107;
+                padding: 12px;
+                border-radius: 6px;
+                margin-bottom: 20px;
+                color: #856404;
+                text-align: center;
+                font-weight: 500;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>♟️ Chess Tournament Monitor</h1>
+            <p class="subtitle">
+                Monitor live tournament updates for up to 4 players
+                simultaneously
+            </p>
+
+            <div id="sessionCount" class="session-counter">
+                <span id="activeCount">0</span> / 4 sessions active
+            </div>
+
+            <form id="monitorForm">
+                <div class="form-group">
+                    <label for="url">Tournament URL</label>
+                    <input
+                        type="text"
+                        id="url"
+                        name="url"
+                        placeholder="https://s1.chess-results.com/tnr1280521.aspx?lan=1&art=9&fed=IND&snr=126&SNode=S0"
+                        required
+                    />
+                    <div class="help-text">
+                        Paste the URL from your player page on chess-results.com
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="check_interval">Check Interval (seconds)</label>
+                    <input
+                        type="number"
+                        id="check_interval"
+                        name="check_interval"
+                        value="30"
+                        min="5"
+                        max="300"
+                    />
+                    <div class="help-text">
+                        How often to check for updates (default: 30 seconds)
+                    </div>
+                </div>
+                <button type="submit" class="button" id="submitBtn">
+                    Start Monitoring
+                </button>
+            </form>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p style="margin-top: 15px; color: #666">Starting monitor...</p>
+            </div>
+
+            <div id="result"></div>
+        </div>
+
+        <script>
+            const form = document.getElementById("monitorForm");
+            const loading = document.getElementById("loading");
+            const result = document.getElementById("result");
+            const submitBtn = document.getElementById("submitBtn");
+            const MAX_SESSIONS = 4;
+
+            // Check session count on load
+            async function updateSessionCount() {
+                try {
+                    const response = await fetch("/api/sessions");
+                    const data = await response.json();
+                    const count = data.sessions.length;
+
+                    document.getElementById("activeCount").textContent = count;
+                    const counter = document.getElementById("sessionCount");
+
+                    if (count >= MAX_SESSIONS) {
+                        counter.classList.add("full");
+                        submitBtn.disabled = true;
+                        submitBtn.textContent = "Maximum Sessions Reached";
+
+                        if (!document.getElementById("limitWarning")) {
+                            const warning = document.createElement("div");
+                            warning.id = "limitWarning";
+                            warning.className = "limit-warning";
+                            warning.innerHTML =
+                                "⚠️ Maximum of 4 sessions reached. Please stop a session to add a new one.";
+                            form.parentNode.insertBefore(warning, form);
+                        }
+                    } else {
+                        counter.classList.remove("full");
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = "Start Monitoring";
+                        const warning = document.getElementById("limitWarning");
+                        if (warning) warning.remove();
+                    }
+
+                    return count;
+                } catch (error) {
+                    console.error("Error checking sessions:", error);
+                    return 0;
+                }
+            }
+
+            // Update count on page load
+            updateSessionCount();
+
+            form.addEventListener("submit", async (e) => {
+                e.preventDefault();
+
+                const url = document.getElementById("url").value;
+                const checkInterval =
+                    document.getElementById("check_interval").value;
+
+                loading.style.display = "block";
+                result.innerHTML = "";
+                submitBtn.disabled = true;
+
+                try {
+                    const response = await fetch("/api/monitor", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            url: url,
+                            check_interval: parseInt(checkInterval),
+                        }),
+                    });
+
+                    const data = await response.json();
+
+                    loading.style.display = "none";
+                    submitBtn.disabled = false;
+
+                    if (response.ok) {
+                        result.innerHTML = `
+                            <div class="result">
+                                <strong>✅ Monitoring started!</strong><br>
+                                <a href="/view" class="view-link">View All Sessions →</a>
+                                <br>
+                                <a href="/view/${data.session_id}" class="view-link">View This Session →</a>
+                            </div>
+                        `;
+                        // Reset form to allow adding more
+                        form.reset();
+                        // Update session count
+                        updateSessionCount();
+                    } else {
+                        result.innerHTML = `
+                            <div class="error">
+                                <strong>❌ Error:</strong> ${data.error}
+                            </div>
+                        `;
+                    }
+                } catch (error) {
+                    loading.style.display = "none";
+                    submitBtn.disabled = false;
+                    result.innerHTML = `
+                        <div class="error">
+                            <strong>❌ Error:</strong> ${error.message}
+                        </div>
+                    `;
+                }
+            });
+        </script>
+    </body>
+</html>
