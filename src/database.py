@@ -33,8 +33,8 @@ class Database:
     def __init__(self, database_url=None):
         """Initialize database connection"""
         if database_url is None:
-            # Try to get from environment, fallback to SQLite for local dev
-            database_url = os.environ.get("DATABASE_URL", "sqlite:///sessions.db")
+            # Try to get from environment, fallback to SQLite
+            database_url = os.environ.get("DATABASE_URL", "sqlite:///data/sessions.db")
 
         # Fix postgres:// to postgresql:// for SQLAlchemy
         if database_url.startswith("postgres://"):

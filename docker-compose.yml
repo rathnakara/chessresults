@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  chess-monitor:
+    build: .
+    container_name: chess-tournament-monitor
+    ports:
+      - "8080:8080"
+    volumes:
+      # Persist SQLite database
+      - ./data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:///data/sessions.db
+      - PORT=8080
+      - DEBUG=false
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
