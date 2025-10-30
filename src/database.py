@@ -44,8 +44,8 @@ class Database:
         self.SessionLocal = sessionmaker(bind=self.engine)
 
     def create_tables(self):
-        """Create all tables"""
-        Base.metadata.create_all(self.engine)
+        """Create all tables if they don't exist"""
+        Base.metadata.create_all(self.engine, checkfirst=True)
 
     def get_session(self):
         """Get a database session"""
