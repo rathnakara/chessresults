@@ -24,14 +24,18 @@ from src.api.client import ChessResultsClient
 from src.parsers.url_parser import parse_chess_url
 from src.services.monitor import TournamentMonitor
 from src.models.tournament import Tournament
+from src.database import Database
 
 app = Flask(__name__, template_folder="./templates")
 
 # Configuration
 MAX_SESSIONS = 4
 
-# Store multiple active monitoring sessions
-sessions: Dict[str, Dict] = {}
+# Initialize database
+db = Database()
+db.create_tables()
+
+# In-memory event queues (these don't need persistence)
 event_queues: Dict[str, queue.Queue] = {}
 
 
@@ -75,7 +79,8 @@ def monitor_worker(session_id: str, config: Config, event_q: queue.Queue):
 
             def on_update(tournament, new_round, error=None):
                 """Callback when tournament updates"""
-                if session_id not in sessions:
+                session = db.get_session_by_id(session_id)
+                if not session:
                     return
 
                 # Handle error case
@@ -86,7 +91,9 @@ def monitor_worker(session_id: str, config: Config, event_q: queue.Queue):
                         "timestamp": datetime.now().isoformat(),
                         "type": "fetch_error",
                     }
-                    sessions[session_id]["last_update"] = datetime.now()
+                    db.update_session(
+                        session_id, last_update=datetime.now(), error=error
+                    )
                     event_q.put(error_data)
                     return
 
@@ -99,21 +106,19 @@ def monitor_worker(session_id: str, config: Config, event_q: queue.Queue):
                     data["new_round"] = new_round is not None
                     data["timestamp"] = datetime.now().isoformat()
 
-                    # Update session
-                    sessions[session_id]["data"] = data
-                    sessions[session_id]["last_update"] = datetime.now()
+                    # Update session in database
+                    db.update_session(session_id, data=data, last_update=datetime.now())
                     event_q.put(data)
 
             # Update session status
-            sessions[session_id]["status"] = "running"
+            db.update_session(session_id, status="running")
             print(f"▶️  Monitor started for session: {session_id}")
 
             # Run monitor
             monitor.run(callback=on_update)
 
             # Mark as finished
-            if session_id in sessions:
-                sessions[session_id]["status"] = "finished"
+            db.update_session(session_id, status="finished")
             print(f"🏁 Monitor finished for session: {session_id}")
 
     except Exception as e:
@@ -121,10 +126,46 @@ def monitor_worker(session_id: str, config: Config, event_q: queue.Queue):
         import traceback
 
         traceback.print_exc()
-        if session_id in sessions:
-            sessions[session_id]["status"] = "error"
-            sessions[session_id]["error"] = str(e)
-            event_q.put({"error": str(e), "type": "worker_error"})
+        db.update_session(session_id, status="error", error=str(e))
+        event_q.put({"error": str(e), "type": "worker_error"})
+
+
+def restart_existing_sessions():
+    """Restart monitoring threads for existing sessions on app startup"""
+    print("🔄 Checking for existing sessions to restart...")
+    active_sessions = db.get_all_sessions()
+
+    for session in active_sessions:
+        # Skip finished or error sessions
+        if session["status"] in ["finished", "error"]:
+            continue
+
+        session_id = session["id"]
+        config_dict = session["config"]
+
+        # Recreate Config object
+        config = Config.from_env()
+        config.tournament_id = config_dict["tournament_id"]
+        config.player_snr = config_dict["player_snr"]
+        config.server = config_dict["server"]
+        config.federation = config_dict["federation"]
+        config.check_interval = config_dict["check_interval"]
+
+        # Create event queue
+        event_queue = queue.Queue()
+        event_queues[session_id] = event_queue
+
+        # Restart monitoring thread
+        thread = threading.Thread(
+            target=monitor_worker, args=(session_id, config, event_queue), daemon=True
+        )
+        thread.start()
+        print(f"✅ Restarted monitoring for session: {session_id}")
+
+    if active_sessions:
+        print(
+            f"🔄 Restarted {len([s for s in active_sessions if s['status'] not in ['finished', 'error']])} monitoring sessions"
+        )
 
 
 @app.route("/")
@@ -137,7 +178,8 @@ def index():
 def start_monitor():
     """Start monitoring a tournament"""
     # Check session limit
-    if len(sessions) >= MAX_SESSIONS:
+    active_sessions = db.get_all_sessions()
+    if len(active_sessions) >= MAX_SESSIONS:
         return jsonify(
             {
                 "error": f"Maximum of {MAX_SESSIONS} sessions reached. Please stop a session before starting a new one."
@@ -172,21 +214,18 @@ def start_monitor():
     event_queue = queue.Queue()
     event_queues[session_id] = event_queue
 
-    sessions[session_id] = {
-        "id": session_id,
-        "url": url,
-        "config": {
+    # Save session to database
+    db.create_session(
+        session_id,
+        url,
+        {
             "tournament_id": config.tournament_id,
             "player_snr": config.player_snr,
             "server": config.server,
             "federation": config.federation,
             "check_interval": config.check_interval,
         },
-        "status": "starting",
-        "created_at": datetime.now(),
-        "last_update": None,
-        "data": None,
-    }
+    )
 
     # Start monitoring in background thread
     thread = threading.Thread(
@@ -205,11 +244,12 @@ def start_monitor():
 @app.route("/api/sessions", methods=["GET"])
 def get_sessions():
     """Get all active monitoring sessions"""
+    active_sessions = db.get_all_sessions()
     return jsonify(
         {
             "sessions": [
                 {
-                    "id": sid,
+                    "id": session["id"],
                     "status": session["status"],
                     "created_at": session["created_at"].isoformat(),
                     "last_update": session["last_update"].isoformat()
@@ -217,7 +257,7 @@ def get_sessions():
                     else None,
                     "config": session["config"],
                 }
-                for sid, session in sessions.items()
+                for session in active_sessions
             ]
         }
     )
@@ -226,10 +266,10 @@ def get_sessions():
 @app.route("/api/status/<session_id>", methods=["GET"])
 def get_status(session_id):
     """Get current status of a specific monitoring session"""
-    if session_id not in sessions:
+    session = db.get_session_by_id(session_id)
+    if not session:
         return jsonify({"error": "Session not found"}), 404
 
-    session = sessions[session_id]
     return jsonify(
         {
             "session_id": session["id"],
@@ -247,7 +287,8 @@ def get_status(session_id):
 @app.route("/api/stream/<session_id>", methods=["GET"])
 def stream_events(session_id):
     """Server-Sent Events stream for real-time updates"""
-    if session_id not in sessions:
+    session = db.get_session_by_id(session_id)
+    if not session:
         return jsonify({"error": "Session not found"}), 404
 
     if session_id not in event_queues:
@@ -277,10 +318,8 @@ def stream_events(session_id):
                 last_heartbeat = datetime.now()
 
                 # Check if session is finished
-                if session_id in sessions and sessions[session_id]["status"] in [
-                    "finished",
-                    "error",
-                ]:
+                session = db.get_session_by_id(session_id)
+                if session and session["status"] in ["finished", "error"]:
                     break
 
             except queue.Empty:
@@ -302,11 +341,14 @@ def stream_events(session_id):
 @app.route("/api/stop/<session_id>", methods=["POST"])
 def stop_monitor(session_id):
     """Stop a specific monitoring session"""
-    if session_id not in sessions:
+    session = db.get_session_by_id(session_id)
+    if not session:
         return jsonify({"error": "Session not found"}), 404
 
-    # Remove session
-    del sessions[session_id]
+    # Remove session from database
+    db.delete_session(session_id)
+
+    # Remove event queue
     if session_id in event_queues:
         del event_queues[session_id]
 
@@ -322,7 +364,8 @@ def view_all_sessions():
 @app.route("/view/<session_id>")
 def view_single_session(session_id):
     """View a specific monitoring session"""
-    if session_id not in sessions:
+    session = db.get_session_by_id(session_id)
+    if not session:
         return "Session not found. Please start monitoring from the home page."
 
     return render_template("single_view.html", session_id=session_id)
@@ -347,6 +390,9 @@ def main():
     host = os.environ.get("HOST", "0.0.0.0")
     port = int(os.environ.get("PORT", 8080))
     debug = os.environ.get("DEBUG", "False").lower() == "true"
+
+    # Restart existing sessions from database
+    restart_existing_sessions()
 
     print("=" * 70)
     print("♟️  Chess Tournament Monitor - Multi-Session")
