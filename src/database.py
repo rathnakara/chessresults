@@ -8,6 +8,7 @@ from datetime import datetime
 from sqlalchemy import create_engine, Column, String, DateTime, Text, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import OperationalError
 
 Base = declarative_base()
 
@@ -45,7 +46,13 @@ class Database:
 
     def create_tables(self):
         """Create all tables if they don't exist"""
-        Base.metadata.create_all(self.engine, checkfirst=True)
+        try:
+            Base.metadata.create_all(self.engine, checkfirst=True)
+        except OperationalError as e:
+            # Table already exists - this can happen with multiple gunicorn workers
+            # racing to create tables. Safe to ignore.
+            if "already exists" not in str(e):
+                raise
 
     def get_session(self):
         """Get a database session"""
