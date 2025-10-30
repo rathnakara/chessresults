@@ -51,7 +51,15 @@ htmlcov/
 # Logs
 *.log
 
-# Project specific
-uv.lock
+# Database (except data directory which is mounted)
 *.db
 *.sqlite
+*.sqlite3
+data/*.db
+data/*.sqlite
+
+# Docker
+.dockerignore
+
+# Project specific
+uv.lock
